@@ -78,19 +78,21 @@ app.MapPost("/api/auth/login", (LoginRequest req) =>
     if (user == null)
         return Results.Unauthorized();
 
-    var tokenHandler = new JwtSecurityTokenHandler();
-    var tokenKey = Encoding.UTF8.GetBytes(key);
-    var tokenDescriptor = new SecurityTokenDescriptor
-    {
-        Subject = new ClaimsIdentity(new[] { new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()) }),
-        Expires = DateTime.UtcNow.AddDays(7),
-        SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(tokenKey), SecurityAlgorithms.HmacSha256Signature)
-    };
-    var token = tokenHandler.CreateToken(tokenDescriptor);
-    var tokenString = tokenHandler.WriteToken(token);
+var tokenHandler = new JwtSecurityTokenHandler();
+var tokenKey = Encoding.UTF8.GetBytes(key);
+var tokenDescriptor = new SecurityTokenDescriptor
+{
+    Subject = new ClaimsIdentity(new[] { new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()) }),
+    Expires = DateTime.UtcNow.AddDays(7),
+    SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(tokenKey), SecurityAlgorithms.HmacSha256Signature)
+};
+var token = tokenHandler.CreateToken(tokenDescriptor);
+var tokenString = tokenHandler.WriteToken(token);   
 
-    return Results.Ok(new { token, username = user.Username });
+return Results.Ok(new { token = tokenString, username = user.Username });
 });
+
+
 
 // Get history (requires auth)
 app.MapGet("/api/calculations", (HttpContext ctx) =>
