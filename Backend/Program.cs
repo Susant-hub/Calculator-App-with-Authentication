@@ -212,6 +212,13 @@ app.MapDelete("/api/calculations", (HttpContext ctx) =>
     return Results.Ok(new { message = "History cleared." });
 }).RequireAuthorization();
 
+app.MapGet("/health", () => Results.Ok(new { status = "Alive", port = Environment.GetEnvironmentVariable("PORT") ?? "unknown" }));
+
+// Add a startup confirmation log
+Console.WriteLine("Application is about to start listening...");
+app.Run();
+Console.WriteLine("Application has stopped.");
+
 app.Run();
 
 record CalculationInput(string Expression, string Result);
