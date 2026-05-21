@@ -1,0 +1,30 @@
+[
+  {
+    "Id": 1,
+    "UserId": 2,
+    "Expression": "6x3",
+    "Result": "18",
+    "Timestamp": "2026-05-21T10:43:42.8872897Z"
+  },
+  {
+    "Id": 2,
+    "UserId": 2,
+    "Expression": "6x3\u00B2",
+    "Result": "54",
+    "Timestamp": "2026-05-21T10:43:44.9611869Z"
+  },
+  {
+    "Id": 3,
+    "UserId": 1,
+    "Expression": "4\u00B2",
+    "Result": "16",
+    "Timestamp": "2026-05-21T11:33:27.0237Z"
+  },
+  {
+    "Id": 4,
+    "UserId": 1,
+    "Expression": "6\u00F72",
+    "Result": "3",
+    "Timestamp": "2026-05-21T11:33:53.4523973Z"
+  }
+]
