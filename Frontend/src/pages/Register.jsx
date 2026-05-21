@@ -4,6 +4,8 @@ import axios from 'axios';
 import styles from './Register.module.css';
 import CalculatorBoldDuotoneIcon from '@iconify-react/solar/calculator-bold-duotone';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5275';
+
 export default function Register({ onLogin }) {
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: '', username: '', password: '', confirm: '' });
@@ -20,7 +22,7 @@ export default function Register({ onLogin }) {
     setLoading(true);
     setError('');
     try {
-      const res = await axios.post('/api/auth/register', {
+      const res = await axios.post(`${API_BASE}/api/auth/register`, {
         email: form.email.trim(),
         username: form.username.trim(),
         password: form.password,

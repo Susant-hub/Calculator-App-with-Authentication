@@ -5,6 +5,8 @@ import { evaluate } from 'mathjs';
 import styles from './Dashboard.module.css';
 import CalculatorBoldDuotoneIcon from '@iconify-react/solar/calculator-bold-duotone';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5275';
+
 const authHeader = () => ({
   Authorization: `Bearer ${localStorage.getItem('token')}`
 });
@@ -64,7 +66,7 @@ export default function Dashboard({ onLogout }) {
 
   const fetchHistory = useCallback(async () => {
     try {
-      const res = await axios.get('/api/calculations', { headers: authHeader() });
+      const res = await axios.get(`${API_BASE}/api/calculations`, { headers: authHeader() });
       setHistory(res.data.slice().reverse());
     } catch (err) {
       console.error('Failed to fetch history', err);
@@ -93,7 +95,7 @@ export default function Dashboard({ onLogout }) {
       const resultStr = parseFloat(evalResult.toFixed(8)).toString();
       setResult(resultStr);
 
-      await axios.post('/api/calculations',
+      await axios.post(`${API_BASE}/api/calculations`,
         { expression: display, result: resultStr },
         { headers: authHeader() }
       );
@@ -106,7 +108,7 @@ export default function Dashboard({ onLogout }) {
   const clearHistory = async () => {
     setLoadingClear(true);
     try {
-      await axios.delete('/api/calculations', { headers: authHeader() });
+      await axios.delete(`${API_BASE}/api/calculations`, { headers: authHeader() });
       setHistory([]);
     } catch (err) {
       console.error('Failed to clear history', err);

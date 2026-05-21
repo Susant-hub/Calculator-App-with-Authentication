@@ -4,6 +4,8 @@ import axios from 'axios';
 import styles from './Login.module.css';
 import CalculatorBoldDuotoneIcon from '@iconify-react/solar/calculator-bold-duotone';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5275';
+
 export default function Login({ onLogin }) {
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: '', password: '' });
@@ -20,7 +22,7 @@ export default function Login({ onLogin }) {
     setLoading(true);
     setError('');
     try {
-      const res = await axios.post('/api/auth/login', {
+      const res = await axios.post(`${API_BASE}/api/auth/login`, {
         email: form.email.trim(),
         password: form.password,
       });

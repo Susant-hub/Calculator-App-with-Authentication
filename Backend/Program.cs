@@ -31,7 +31,11 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReact", policy =>
         policy
-            .WithOrigins("http://localhost:3000", "http://localhost:5173")
+            .WithOrigins(
+                "http://localhost:3000",
+                "http://localhost:5173",
+                "https://suscalc.netlify.app"   // <--- your Netlify frontend
+            )
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials());
