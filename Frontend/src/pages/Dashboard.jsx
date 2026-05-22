@@ -82,10 +82,8 @@ export default function Dashboard({ onLogout }) {
     try {
       const evalResult = evaluate(toMathExpr(expr));
       if (!isFinite(evalResult)) throw new Error();
-
       const resultStr = parseFloat(evalResult.toFixed(8)).toString();
       setResult(resultStr);
-
       await axios.post(`${API_BASE}/api/calculations`,
         { expression: expr, result: resultStr },
         { headers: authHeader() }
@@ -108,23 +106,10 @@ export default function Dashboard({ onLogout }) {
     setKeyError('');
   };
 
-  const handleInputChange = (e) => {
-    // User typed directly in the input field
-    const newValue = e.target.value;
-    // Optional: you can validate here, but we'll just accept what they type
-    setDisplay(newValue);
-    setKeyError('');
-  };
-
   const handleKeyDown = (e) => {
     const key = e.key;
-    // Prevent default for keys we handle specially
-    const preventKeys = ['Enter', 'Backspace', 'Escape', 'Tab', 'Delete', 'Home', 'End', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
-    if (preventKeys.includes(key)) {
-      e.preventDefault();
-    }
-
     let mapped = null;
+
     if (/^[0-9]$/.test(key)) mapped = key;
     else if (key === '+') mapped = '+';
     else if (key === '-') mapped = '-';
@@ -141,14 +126,12 @@ export default function Dashboard({ onLogout }) {
     else if (key === 'r') mapped = 'CE';
 
     if (mapped) {
+      e.preventDefault();
       handleButton(mapped);
     } else if (key.length === 1 && !/^[0-9+\-*/%().]$/.test(key)) {
-      // Single character key that is not in our allowed set
+      e.preventDefault();
       setKeyError(`Cannot perform operation: "${key}"`);
       setTimeout(() => setKeyError(''), 2000);
-    } else if (key === ' ') {
-      // ignore spaces
-      e.preventDefault();
     }
   };
 
@@ -210,7 +193,7 @@ export default function Dashboard({ onLogout }) {
               type="text"
               className={styles.expressionInput}
               value={display}
-              onChange={handleInputChange}
+              onChange={(e) => setDisplay(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="0"
               autoComplete="off"
