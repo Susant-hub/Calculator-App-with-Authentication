@@ -63,6 +63,7 @@ export default function Dashboard({ onLogout }) {
   const [result, setResult]         = useState('');
   const [history, setHistory]       = useState([]);
   const [loadingClear, setLoadingClear] = useState(false);
+  const [keyError, setKeyError]     = useState('');
 
   const fetchHistory = useCallback(async () => {
     try {
@@ -124,6 +125,47 @@ export default function Dashboard({ onLogout }) {
     navigate('/login');
   };
 
+  // Keyboard support
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const key = e.key;
+      // Prevent default for keys that might cause browser actions
+      const preventKeys = ['Enter', 'Backspace', 'Escape', 'Tab', 'Delete', 'Home', 'End', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+      if (preventKeys.includes(key)) {
+        e.preventDefault();
+      }
+
+      // Map keys to button labels
+      let mapped = null;
+      if (/^[0-9]$/.test(key)) mapped = key;
+      else if (key === '+') mapped = '+';
+      else if (key === '-') mapped = '-';
+      else if (key === '*') mapped = 'x';
+      else if (key === '/') mapped = '÷';
+      else if (key === '.') mapped = '.';
+      else if (key === 'Enter') mapped = '=';
+      else if (key === 'Backspace') mapped = '⌫';
+      else if (key === 'Escape') mapped = 'C';
+      else if (key === 'Delete') mapped = 'CE';
+      else if (key === '^' || key === '**') mapped = 'x²';
+      else if (key === 's' || key === 'S') mapped = '√';   // 's' for sqrt
+      else if (key === 'c' || key === 'C') mapped = 'C';
+      else if (key === 'r') mapped = 'CE'; // 'r' for reset
+
+      if (mapped) {
+        handleButton(mapped);
+        setKeyError('');
+      } else {
+        // Unsupported key
+        setKeyError(`Cannot perform operation: "${key}"`);
+        setTimeout(() => setKeyError(''), 2000);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [display, result, handleButton]);
+
   return (
     <div className={styles.page}>
 
@@ -149,6 +191,21 @@ export default function Dashboard({ onLogout }) {
         </div>
         <div className={styles.heroEmoji}>🧮</div>
       </div>
+
+      {/* Keyboard error message */}
+      {keyError && (
+        <div style={{
+          backgroundColor: '#ffebee',
+          color: '#c62828',
+          padding: '8px 16px',
+          borderRadius: '8px',
+          margin: '0 1.5rem 1rem 1.5rem',
+          textAlign: 'center',
+          fontSize: '0.9rem'
+        }}>
+          {keyError}
+        </div>
+      )}
 
       <div className={styles.mainContent}>
 
