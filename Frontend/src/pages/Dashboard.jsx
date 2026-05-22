@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { evaluate } from 'mathjs';
@@ -58,6 +58,7 @@ const toMathExpr = (display) =>
 export default function Dashboard({ onLogout }) {
   const navigate = useNavigate();
   const username = localStorage.getItem('username') || 'User';
+  const inputRef = useRef(null);
 
   const [display, setDisplay]       = useState('');
   const [result, setResult]         = useState('');
@@ -76,33 +77,78 @@ export default function Dashboard({ onLogout }) {
 
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
-  const handleButton = (label) => {
-    if (label === null) return;
-    if (label === 'C')  { setDisplay(''); setResult(''); return; }
-    if (label === 'CE') { setDisplay(''); return; }
-    if (label === '⌫')  { setDisplay(prev => prev.slice(0, -1)); return; }
-    if (label === '=')  { handleEvaluate(); return; }
-    if (label === 'x²') { setDisplay(prev => prev + '²'); return; }
-    if (label === '√')  { setDisplay(prev => prev + '√'); return; }
-    setDisplay(prev => prev + label);
-  };
-
-  const handleEvaluate = async () => {
-    if (!display.trim()) return;
+  const evaluateExpression = useCallback(async (expr) => {
+    if (!expr.trim()) return;
     try {
-      const evalResult = evaluate(toMathExpr(display));
+      const evalResult = evaluate(toMathExpr(expr));
       if (!isFinite(evalResult)) throw new Error();
 
       const resultStr = parseFloat(evalResult.toFixed(8)).toString();
       setResult(resultStr);
 
       await axios.post(`${API_BASE}/api/calculations`,
-        { expression: display, result: resultStr },
+        { expression: expr, result: resultStr },
         { headers: authHeader() }
       );
       fetchHistory();
     } catch {
       setResult('Error');
+    }
+  }, [fetchHistory]);
+
+  const handleButton = (label) => {
+    if (label === null) return;
+    if (label === 'C')  { setDisplay(''); setResult(''); setKeyError(''); return; }
+    if (label === 'CE') { setDisplay(''); setKeyError(''); return; }
+    if (label === '⌫')  { setDisplay(prev => prev.slice(0, -1)); setKeyError(''); return; }
+    if (label === '=')  { evaluateExpression(display); return; }
+    if (label === 'x²') { setDisplay(prev => prev + '²'); return; }
+    if (label === '√')  { setDisplay(prev => prev + '√'); return; }
+    setDisplay(prev => prev + label);
+    setKeyError('');
+  };
+
+  const handleInputChange = (e) => {
+    // User typed directly in the input field
+    const newValue = e.target.value;
+    // Optional: you can validate here, but we'll just accept what they type
+    setDisplay(newValue);
+    setKeyError('');
+  };
+
+  const handleKeyDown = (e) => {
+    const key = e.key;
+    // Prevent default for keys we handle specially
+    const preventKeys = ['Enter', 'Backspace', 'Escape', 'Tab', 'Delete', 'Home', 'End', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+    if (preventKeys.includes(key)) {
+      e.preventDefault();
+    }
+
+    let mapped = null;
+    if (/^[0-9]$/.test(key)) mapped = key;
+    else if (key === '+') mapped = '+';
+    else if (key === '-') mapped = '-';
+    else if (key === '*') mapped = 'x';
+    else if (key === '/') mapped = '÷';
+    else if (key === '.') mapped = '.';
+    else if (key === 'Enter') mapped = '=';
+    else if (key === 'Backspace') mapped = '⌫';
+    else if (key === 'Escape') mapped = 'C';
+    else if (key === 'Delete') mapped = 'CE';
+    else if (key === '^' || key === '**') mapped = 'x²';
+    else if (key === 's' || key === 'S') mapped = '√';
+    else if (key === 'c' || key === 'C') mapped = 'C';
+    else if (key === 'r') mapped = 'CE';
+
+    if (mapped) {
+      handleButton(mapped);
+    } else if (key.length === 1 && !/^[0-9+\-*/%().]$/.test(key)) {
+      // Single character key that is not in our allowed set
+      setKeyError(`Cannot perform operation: "${key}"`);
+      setTimeout(() => setKeyError(''), 2000);
+    } else if (key === ' ') {
+      // ignore spaces
+      e.preventDefault();
     }
   };
 
@@ -125,50 +171,8 @@ export default function Dashboard({ onLogout }) {
     navigate('/login');
   };
 
-  // Keyboard support
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      const key = e.key;
-      // Prevent default for keys that might cause browser actions
-      const preventKeys = ['Enter', 'Backspace', 'Escape', 'Tab', 'Delete', 'Home', 'End', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
-      if (preventKeys.includes(key)) {
-        e.preventDefault();
-      }
-
-      // Map keys to button labels
-      let mapped = null;
-      if (/^[0-9]$/.test(key)) mapped = key;
-      else if (key === '+') mapped = '+';
-      else if (key === '-') mapped = '-';
-      else if (key === '*') mapped = 'x';
-      else if (key === '/') mapped = '÷';
-      else if (key === '.') mapped = '.';
-      else if (key === 'Enter') mapped = '=';
-      else if (key === 'Backspace') mapped = '⌫';
-      else if (key === 'Escape') mapped = 'C';
-      else if (key === 'Delete') mapped = 'CE';
-      else if (key === '^' || key === '**') mapped = 'x²';
-      else if (key === 's' || key === 'S') mapped = '√';   // 's' for sqrt
-      else if (key === 'c' || key === 'C') mapped = 'C';
-      else if (key === 'r') mapped = 'CE'; // 'r' for reset
-
-      if (mapped) {
-        handleButton(mapped);
-        setKeyError('');
-      } else {
-        // Unsupported key
-        setKeyError(`Cannot perform operation: "${key}"`);
-        setTimeout(() => setKeyError(''), 2000);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [display, result, handleButton]);
-
   return (
     <div className={styles.page}>
-
       <nav className={styles.navbar}>
         <div className={styles.logo}>
           <CalculatorBoldDuotoneIcon height="2em" color='#7c5cfc' />
@@ -192,26 +196,25 @@ export default function Dashboard({ onLogout }) {
         <div className={styles.heroEmoji}>🧮</div>
       </div>
 
-      {/* Keyboard error message */}
       {keyError && (
-        <div style={{
-          backgroundColor: '#ffebee',
-          color: '#c62828',
-          padding: '8px 16px',
-          borderRadius: '8px',
-          margin: '0 1.5rem 1rem 1.5rem',
-          textAlign: 'center',
-          fontSize: '0.9rem'
-        }}>
+        <div className={styles.errorBanner}>
           {keyError}
         </div>
       )}
 
       <div className={styles.mainContent}>
-
         <div className={styles.calculator}>
           <div className={styles.display}>
-            <div className={styles.expression}>{display || '0'}</div>
+            <input
+              ref={inputRef}
+              type="text"
+              className={styles.expressionInput}
+              value={display}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              placeholder="0"
+              autoComplete="off"
+            />
             <div className={styles.result}>{result}</div>
           </div>
           <div className={styles.buttons}>
@@ -250,7 +253,6 @@ export default function Dashboard({ onLogout }) {
             }
           </div>
         </div>
-
       </div>
     </div>
   );

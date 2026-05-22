@@ -194,6 +194,20 @@
   min-height: 1.5rem;
 }
 
+.expressionInput {
+  width: 100%;
+  background: transparent;
+  border: none;
+  font-size: inherit;
+  font-family: inherit;
+  color: inherit;
+  outline: none;
+  font-size: 1rem;
+  color: #888;
+  font-family: monospace;
+  word-break: break-all;
+}
+
 .result {
   font-size: var(--fs-600);
   font-weight: 700;
