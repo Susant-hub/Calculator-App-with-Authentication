@@ -1,17 +1,17 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-var key = "ThisIsASecretKeyForJwtTokenThatIsAtLeast32BytesLong!";
+var key = builder.Configuration["JwtKey"] ?? "ThisIsASecretKeyForJwtTokenThatIsAtLeast32BytesLong!";
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -27,6 +27,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReact", policy =>
@@ -34,14 +35,28 @@ builder.Services.AddCors(options =>
             .WithOrigins(
                 "http://localhost:3000",
                 "http://localhost:5173",
-                "https://suscalc.netlify.app"   // <--- your Netlify frontend
+                "https://suscalc.netlify.app"
             )
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials());
 });
 
+var dbPath = builder.Configuration["DbPath"]
+    ?? Path.Combine(AppContext.BaseDirectory, "data", "suscalc.db");
+
+Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
+
+builder.Services.AddDbContext<AppDbContext>(opt =>
+    opt.UseSqlite($"Data Source={dbPath}"));
+
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.EnsureCreated();
+}
 
 if (app.Environment.IsDevelopment())
 {
@@ -53,36 +68,8 @@ app.UseCors("AllowReact");
 app.UseAuthentication();
 app.UseAuthorization();
 
-// ── FILE PATHS ───
-var dataDir = Path.Combine(AppContext.BaseDirectory, "data");
-Directory.CreateDirectory(dataDir);
-var usersFile = Path.Combine(dataDir, "users.json");
-var calcsFile = Path.Combine(dataDir, "calculations.json");
+// ── HELPERS ──────────────────────────────────────────────────────────────────
 
-var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
-
-// ── PERSISTENCE HELPERS ───
-List<User> LoadUsers()
-{
-    if (!File.Exists(usersFile)) return [];
-    try { return JsonSerializer.Deserialize<List<User>>(File.ReadAllText(usersFile)) ?? []; }
-    catch { return []; }
-}
-
-void SaveUsers(List<User> users) =>
-    File.WriteAllText(usersFile, JsonSerializer.Serialize(users, jsonOptions));
-
-List<Calculation> LoadCalcs()
-{
-    if (!File.Exists(calcsFile)) return [];
-    try { return JsonSerializer.Deserialize<List<Calculation>>(File.ReadAllText(calcsFile)) ?? []; }
-    catch { return []; }
-}
-
-void SaveCalcs(List<Calculation> calcs) =>
-    File.WriteAllText(calcsFile, JsonSerializer.Serialize(calcs, jsonOptions));
-
-// ── HELPERS ──
 string HashPassword(string password)
 {
     var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(password));
@@ -115,44 +102,43 @@ int? GetUserId(HttpContext ctx)
     return int.TryParse(claim, out int id) ? id : null;
 }
 
-// ── REGISTER ──
-app.MapPost("/api/auth/register", (RegisterRequest req) =>
+// ── REGISTER ─────────────────────────────────────────────────────────────────
+
+app.MapPost("/api/auth/register", async (RegisterRequest req, AppDbContext db) =>
 {
     if (string.IsNullOrWhiteSpace(req.Email)) return Results.BadRequest("Email is required.");
     if (string.IsNullOrWhiteSpace(req.Password)) return Results.BadRequest("Password is required.");
     if (string.IsNullOrWhiteSpace(req.Username)) return Results.BadRequest("Username is required.");
     if (req.Password.Length < 6) return Results.BadRequest("Password must be at least 6 characters.");
 
-    var users = LoadUsers();
+    var email = req.Email.Trim().ToLowerInvariant();
 
-    if (users.Any(u => u.Email.Equals(req.Email.Trim(), StringComparison.OrdinalIgnoreCase)))
+    if (await db.Users.AnyAsync(u => u.Email == email))
         return Results.BadRequest("An account with this email already exists.");
 
-    var newId = users.Count > 0 ? users.Max(u => u.Id) + 1 : 1;
     var user = new User
     {
-        Id = newId,
-        Email = req.Email.Trim().ToLowerInvariant(),
+        Email = email,
         PasswordHash = HashPassword(req.Password),
         Username = req.Username.Trim()
     };
-    users.Add(user);
-    SaveUsers(users);
+
+    db.Users.Add(user);
+    await db.SaveChangesAsync();
 
     return Results.Ok(new { token = GenerateToken(user), username = user.Username });
 });
 
-// ── LOGIN ──
-app.MapPost("/api/auth/login", (LoginRequest req) =>
+// ── LOGIN ─────────────────────────────────────────────────────────────────────
+
+app.MapPost("/api/auth/login", async (LoginRequest req, AppDbContext db) =>
 {
     if (string.IsNullOrWhiteSpace(req.Email) || string.IsNullOrWhiteSpace(req.Password))
         return Results.BadRequest("Email and password are required.");
 
-    var users = LoadUsers();
+    var email = req.Email.Trim().ToLowerInvariant();
     var hash = HashPassword(req.Password);
-    var user = users.FirstOrDefault(u =>
-        u.Email.Equals(req.Email.Trim().ToLowerInvariant(), StringComparison.Ordinal)
-        && u.PasswordHash == hash);
+    var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email && u.PasswordHash == hash);
 
     if (user == null)
         return Results.BadRequest("Incorrect email or password.");
@@ -160,22 +146,24 @@ app.MapPost("/api/auth/login", (LoginRequest req) =>
     return Results.Ok(new { token = GenerateToken(user), username = user.Username });
 });
 
-// ── GET HISTORY ──
-app.MapGet("/api/calculations", (HttpContext ctx) =>
+// ── GET HISTORY ───────────────────────────────────────────────────────────────
+
+app.MapGet("/api/calculations", async (HttpContext ctx, AppDbContext db) =>
 {
     var userId = GetUserId(ctx);
     if (userId == null) return Results.Unauthorized();
 
-    var calcs = LoadCalcs()
+    var calcs = await db.Calculations
         .Where(c => c.UserId == userId.Value)
         .OrderByDescending(c => c.Timestamp)
-        .ToList();
+        .ToListAsync();
 
     return Results.Ok(calcs);
 }).RequireAuthorization();
 
-// ── SAVE CALCULATION ──
-app.MapPost("/api/calculations", (CalculationInput input, HttpContext ctx) =>
+// ── SAVE CALCULATION ──────────────────────────────────────────────────────────
+
+app.MapPost("/api/calculations", async (CalculationInput input, HttpContext ctx, AppDbContext db) =>
 {
     var userId = GetUserId(ctx);
     if (userId == null) return Results.Unauthorized();
@@ -183,41 +171,37 @@ app.MapPost("/api/calculations", (CalculationInput input, HttpContext ctx) =>
     if (string.IsNullOrWhiteSpace(input.Expression) || string.IsNullOrWhiteSpace(input.Result))
         return Results.BadRequest("Expression and result are required.");
 
-    var calcs = LoadCalcs();
-    var newId = calcs.Count > 0 ? calcs.Max(c => c.Id) + 1 : 1;
     var calc = new Calculation
     {
-        Id = newId,
         UserId = userId.Value,
         Expression = input.Expression,
         Result = input.Result,
         Timestamp = DateTime.UtcNow
     };
-    calcs.Add(calc);
-    SaveCalcs(calcs);
+
+    db.Calculations.Add(calc);
+    await db.SaveChangesAsync();
 
     return Results.Ok(calc);
 }).RequireAuthorization();
 
-// ── CLEAR HISTORY ───
-app.MapDelete("/api/calculations", (HttpContext ctx) =>
+// ── CLEAR HISTORY ─────────────────────────────────────────────────────────────
+
+app.MapDelete("/api/calculations", async (HttpContext ctx, AppDbContext db) =>
 {
     var userId = GetUserId(ctx);
     if (userId == null) return Results.Unauthorized();
 
-    var calcs = LoadCalcs();
-    calcs.RemoveAll(c => c.UserId == userId.Value);
-    SaveCalcs(calcs);
+    var calcs = await db.Calculations.Where(c => c.UserId == userId.Value).ToListAsync();
+    db.Calculations.RemoveRange(calcs);
+    await db.SaveChangesAsync();
 
     return Results.Ok(new { message = "History cleared." });
 }).RequireAuthorization();
 
-app.MapGet("/health", () => Results.Ok(new { status = "Alive", port = Environment.GetEnvironmentVariable("PORT") ?? "unknown" }));
+// ── HEALTH ────────────────────────────────────────────────────────────────────
 
-// Add a startup confirmation log
-Console.WriteLine("Application is about to start listening...");
-app.Run();
-Console.WriteLine("Application has stopped.");
+app.MapGet("/health", () => Results.Ok(new { status = "Alive" }));
 
 app.Run();
 

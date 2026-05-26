@@ -6,6 +6,7 @@ import CalculatorBoldDuotoneIcon from '@iconify-react/solar/calculator-bold-duot
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5275';
 
+
 export default function Register({ onLogin }) {
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: '', username: '', password: '', confirm: '' });
