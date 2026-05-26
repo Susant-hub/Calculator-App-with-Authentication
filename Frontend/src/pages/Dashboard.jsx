@@ -77,6 +77,13 @@ export default function Dashboard({ onLogout }) {
 
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
+  
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, []);
+
   const evaluateExpression = useCallback(async (expr) => {
     if (!expr.trim()) return;
     try {
@@ -92,18 +99,22 @@ export default function Dashboard({ onLogout }) {
     } catch {
       setResult('Error');
     }
+
+    if (inputRef.current) inputRef.current.focus();
   }, [fetchHistory]);
 
   const handleButton = (label) => {
     if (label === null) return;
-    if (label === 'C')  { setDisplay(''); setResult(''); setKeyError(''); return; }
-    if (label === 'CE') { setDisplay(''); setKeyError(''); return; }
-    if (label === '⌫')  { setDisplay(prev => prev.slice(0, -1)); setKeyError(''); return; }
-    if (label === '=')  { evaluateExpression(display); return; }
-    if (label === 'x²') { setDisplay(prev => prev + '²'); return; }
-    if (label === '√')  { setDisplay(prev => prev + '√'); return; }
-    setDisplay(prev => prev + label);
-    setKeyError('');
+    if (label === 'C')  { setDisplay(''); setResult(''); setKeyError(''); }
+    else if (label === 'CE') { setDisplay(''); setKeyError(''); }
+    else if (label === '⌫')  { setDisplay(prev => prev.slice(0, -1)); setKeyError(''); }
+    else if (label === '=')  { evaluateExpression(display); return; }
+    else if (label === 'x²') { setDisplay(prev => prev + '²'); }
+    else if (label === '√')  { setDisplay(prev => prev + '√'); }
+    else { setDisplay(prev => prev + label); setKeyError(''); }
+
+
+    if (inputRef.current) inputRef.current.focus();
   };
 
   const handleKeyDown = (e) => {
@@ -133,6 +144,7 @@ export default function Dashboard({ onLogout }) {
       setKeyError(`Cannot perform operation: "${key}"`);
       setTimeout(() => setKeyError(''), 2000);
     }
+    
   };
 
   const clearHistory = async () => {
@@ -144,6 +156,8 @@ export default function Dashboard({ onLogout }) {
       console.error('Failed to clear history', err);
     } finally {
       setLoadingClear(false);
+
+      if (inputRef.current) inputRef.current.focus();
     }
   };
 
